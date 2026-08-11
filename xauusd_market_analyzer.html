@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XAUUSD Market Analyzer</title>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0b1020;color:#e9eefb;font-family:Inter,Arial,sans-serif}
+header{padding:18px 22px;border-bottom:1px solid #20283d;display:flex;justify-content:space-between;align-items:center}
+h1{font-size:20px;margin:0}.gold{color:#f5c451}.wrap{padding:18px;max-width:1400px;margin:auto}
+.grid{display:grid;grid-template-columns:1fr 300px;gap:16px}.card{background:#11182a;border:1px solid #20283d;border-radius:14px;padding:14px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.btn,select{background:#18223a;color:#e9eefb;border:1px solid #2b3855;border-radius:8px;padding:9px 12px;cursor:pointer}.btn.active{background:#b88921;color:#111}
+#chart{height:560px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}.stat{background:#151e33;padding:12px;border-radius:10px}.label{font-size:11px;color:#8e9ab5}.value{font-size:18px;margin-top:4px}
+.side h2{font-size:15px;margin:4px 0 12px}.row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #20283d}.signal{margin-top:14px;padding:12px;border-radius:10px;background:#16233a}.buy{color:#53d18c}.sell{color:#ff7373}.neutral{color:#f5c451}
+small{color:#8e9ab5}.note{font-size:12px;line-height:1.5;color:#9aa6bf;margin-top:14px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}#chart{height:480px}}
+</style>
+</head>
+<body>
+<header><h1>🥇 <span class="gold">XAUUSD</span> Market Analyzer</h1><small>Chart-based SMC / market structure</small></header>
+<div class="wrap">
+<div class="grid">
+<main>
+<div class="card">
+<div class="toolbar">
+<button class="btn active" data-tf="5">5m</button><button class="btn" data-tf="15">15m</button><button class="btn" data-tf="30">30m</button><button class="btn" data-tf="60">1H</button><button class="btn" data-tf="240">4H</button>
+<select id="mode"><option>Market Structure</option><option>Liquidity</option><option>FVG</option><option>Support / Resistance</option></select>
+</div>
+<div id="chart"></div>
+<div class="stats">
+<div class="stat"><div class="label">CURRENT PRICE</div><div class="value" id="price">—</div></div>
+<div class="stat"><div class="label">PREVIOUS HIGH</div><div class="value" id="high">—</div></div>
+<div class="stat"><div class="label">PREVIOUS LOW</div><div class="value" id="low">—</div></div>
+<div class="stat"><div class="label">BIAS</div><div class="value neutral" id="bias">—</div></div>
+</div>
+</div>
+</main>
+<aside class="card side">
+<h2>Analysis Dashboard</h2>
+<div class="row"><span>Trend</span><b id="trend">—</b></div>
+<div class="row"><span>Structure</span><b id="structure">—</b></div>
+<div class="row"><span>Liquidity</span><b id="liq">—</b></div>
+<div class="row"><span>FVG</span><b id="fvg">—</b></div>
+<div class="row"><span>Premium / Discount</span><b id="pd">—</b></div>
+<div class="signal"><div class="label">SETUP</div><div id="setup" class="neutral" style="font-size:18px;margin-top:5px">Analyzing…</div></div>
+<div class="note">Educational tool only. The signals are rule-based and are not financial advice. Connect a live market-data feed before using real-time prices.</div>
+</aside>
+</div>
+</div>
+<script>
+const chart=LightweightCharts.createChart(document.getElementById('chart'),{
+layout:{background:{type:'solid',color:'#11182a'},textColor:'#9aa6bf'},
+grid:{vertLines:{color:'#1b2437'},horzLines:{color:'#1b2437'}},
+rightPriceScale:{borderColor:'#28344d'},timeScale:{borderColor:'#28344d',timeVisible:true,secondsVisible:false}
+});
+const candles=chart.addCandlestickSeries({upColor:'#53d18c',downColor:'#ff7373',borderVisible:false,wickUpColor:'#53d18c',wickDownColor:'#ff7373'});
+let tf=5;
+
+function makeData(minutes){
+ let out=[], base=4330, t=Math.floor(Date.now()/1000)-minutes*60*100;
+ for(let i=0;i<100;i++){
+   let wave=Math.sin(i/8)*16 + i*0.18 + Math.sin(i/3)*3;
+   let close=base+wave+(Math.random()-0.5)*5;
+   let open=i?out[i-1].close:close-1;
+   let high=Math.max(open,close)+Math.random()*4;
+   let low=Math.min(open,close)-Math.random()*4;
+   out.push({time:t+i*minutes*60,open,high,low,close});
+ }
+ return out;
+}
+function analyze(){
+ const data=makeData(tf); candles.setData(data);
+ const last=data[data.length-1], prev=data[data.length-2];
+ const prevHigh=Math.max(...data.slice(-21,-1).map(x=>x.high));
+ const prevLow=Math.min(...data.slice(-21,-1).map(x=>x.low));
+ const mid=(prevHigh+prevLow)/2;
+ const trend=last.close>data[data.length-10].close?'Bullish':'Bearish';
+ const structure=last.close>prev.high?'BOS ↑':last.close<prev.low?'BOS ↓':trend==='Bullish'?'Higher High / Higher Low':'Lower High / Lower Low';
+ const liquidity=last.close>prevHigh?'Buy-side taken':last.close<prevLow?'Sell-side taken':'Resting above/below';
+ const fvg=Math.abs(last.low-prev.high)>2?'Possible FVG':'No clear FVG';
+ const pd=last.close>=mid?'Premium':'Discount';
+ let setup='WAIT — wait for confirmation', cls='neutral';
+ if(trend==='Bullish' && pd==='Discount'){setup='BUY WATCH — bullish confirmation';cls='buy'}
+ if(trend==='Bearish' && pd==='Premium'){setup='SELL WATCH — bearish confirmation';cls='sell'}
+ document.getElementById('price').textContent=last.close.toFixed(2);
+ document.getElementById('high').textContent=prevHigh.toFixed(2);
+ document.getElementById('low').textContent=prevLow.toFixed(2);
+ document.getElementById('bias').textContent=trend.toUpperCase();
+ document.getElementById('bias').className='value '+(trend==='Bullish'?'buy':'sell');
+ document.getElementById('trend').textContent=trend;
+ document.getElementById('trend').className=trend==='Bullish'?'buy':'sell';
+ document.getElementById('structure').textContent=structure;
+ document.getElementById('liq').textContent=liquidity;
+ document.getElementById('fvg').textContent=fvg;
+ document.getElementById('pd').textContent=pd;
+ document.getElementById('setup').textContent=setup;
+ document.getElementById('setup').className=cls;
+}
+document.querySelectorAll('.btn').forEach(b=>b.onclick=()=>{document.querySelectorAll('.btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');tf=+b.dataset.tf;analyze()});
+window.addEventListener('resize',()=>chart.applyOptions({width:document.getElementById('chart').clientWidth}));
+analyze();
+</script>
+</body>
+</html>
